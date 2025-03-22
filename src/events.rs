@@ -9,7 +9,11 @@ pub enum Event {
         ip: SocketAddr,
         out_stream: OwnedWriteHalf,
     },
-    NewMessage(MsgIn),
+    NewMessage {
+        sender: SocketAddr,
+        msg: MsgIn,
+    },
+    BadMessage(SocketAddr),
     ConnectionDropped(SocketAddr),
 }
 

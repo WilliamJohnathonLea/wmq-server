@@ -4,14 +4,14 @@ use std::{collections::HashMap, env, error::Error, net::SocketAddr};
 
 use events::{Event, MsgIn};
 use tokio::{
-    io::AsyncReadExt,
+    io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream, tcp::OwnedWriteHalf},
     sync::mpsc::{self, Receiver, Sender},
 };
 
 const BUFF_SIZE: usize = 512 * 1024;
-// const ACK: &str = "ACK";
-// const NACK: &str = "NACK";
+const ACK: &str = "ACK";
+const NACK: &str = "NACK";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -53,9 +53,15 @@ async fn handle_incoming_connection(ip: SocketAddr, stream: TcpStream, event_cha
             Ok(n) => {
                 println!("read {n} bytes");
                 let Ok(msg_in) = serde_json::from_slice::<MsgIn>(&in_buffer[..n]) else {
+                    let _ = event_chan.send(Event::BadMessage(ip)).await;
                     continue;
                 };
-                let _ = event_chan.send(Event::NewMessage(msg_in)).await;
+                let _ = event_chan
+                    .send(Event::NewMessage {
+                        sender: ip,
+                        msg: msg_in,
+                    })
+                    .await;
             }
         }
     }
@@ -69,10 +75,9 @@ async fn handle_inbound_messages(mut event_chan: Receiver<Event>) {
     while let Some(event) = event_chan.recv().await {
         match event {
             Event::NewConnection { ip, out_stream } => {
-                println!("received new connection from {ip}");
                 connections.insert(ip, out_stream);
             }
-            Event::NewMessage(msg) => {
+            Event::NewMessage { sender, msg } => {
                 let q = queues.get_mut(&msg.queue);
                 match q {
                     None => {
@@ -83,9 +88,20 @@ async fn handle_inbound_messages(mut event_chan: Receiver<Event>) {
                         v.append(&mut tmp);
                     }
                 }
+                match connections.get_mut(&sender) {
+                    Some(s) => {
+                        let _ = s.write(ACK.as_bytes()).await;
+                    }
+                    None => (),
+                }
             }
+            Event::BadMessage(sender) => match connections.get_mut(&sender) {
+                Some(s) => {
+                    let _ = s.write(NACK.as_bytes()).await;
+                }
+                None => (),
+            },
             Event::ConnectionDropped(sock_addr) => {
-                println!("dropped connection from {sock_addr}");
                 connections.remove(&sock_addr);
             }
         }

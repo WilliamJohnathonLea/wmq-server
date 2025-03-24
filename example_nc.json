@@ -1,0 +1,1 @@
+{ "type": "Consumer", "id": "test", "queues": ["test"] }

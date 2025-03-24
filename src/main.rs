@@ -1,40 +1,109 @@
+mod consumer;
 mod events;
+mod messages;
 
 use std::{collections::HashMap, env, error::Error, net::SocketAddr};
 
-use events::{Event, MsgIn};
+use consumer::Consumer;
+use events::Event;
+use messages::MsgIn;
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::{TcpListener, TcpStream, tcp::OwnedWriteHalf},
-    sync::mpsc::{self, Receiver, Sender},
+    io::AsyncReadExt,
+    net::{TcpListener, TcpStream},
+    sync::{
+        broadcast,
+        mpsc::{self, Receiver, Sender},
+    },
 };
 
 const BUFF_SIZE: usize = 512 * 1024;
-const ACK: &str = "ACK";
-const NACK: &str = "NACK";
+// const ACK: &str = "ACK";
+// const NACK: &str = "NACK";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     dotenvy::dotenv()?;
     let port = env::var("PORT")?;
     let listener = TcpListener::bind(format!("0.0.0.0:{port}")).await?;
-    let (tx, rx) = mpsc::channel::<Event>(128);
+    let (tx, rx) = mpsc::channel::<Event>(100);
 
-    tokio::spawn(handle_inbound_messages(rx));
+    tokio::spawn(handle_events(rx));
 
     loop {
         let (stream, addr) = listener.accept().await?;
-        let tx = tx.clone();
 
-        tokio::spawn(handle_incoming_connection(addr, stream, tx));
+        tokio::spawn(handle_tcp(addr, stream, tx.clone()));
     }
 }
 
-async fn handle_incoming_connection(ip: SocketAddr, stream: TcpStream, event_chan: Sender<Event>) {
+async fn handle_events(mut event_chan: Receiver<Event>) {
+    let mut queue_map = HashMap::<String, broadcast::Sender<MsgIn>>::new();
+
+    let (tx, _) = broadcast::channel::<MsgIn>(20);
+    while let Some(event) = event_chan.recv().await {
+        match event {
+            Event::NewConsumer {
+                id,
+                queues,
+                out_stream,
+            } => {
+                for queue in queues {
+                    if !queue_map.contains_key(&queue) {
+                        queue_map.insert(queue, tx.clone());
+                    }
+                }
+                let consumer = Consumer::new(out_stream, tx.subscribe());
+                tokio::spawn(consumer.consume());
+                // FIXME: acks should not be sent to all consumers
+                let _ = tx.send(MsgIn::Data {
+                    queue: "queue1".to_string(),
+                    sender: "producer1".to_string(),
+                    body: "hello".to_string(),
+                });
+            }
+            Event::NewMessage(msg_in) => {
+                println!("received message: {msg_in:?}");
+            }
+        }
+    }
+}
+
+async fn handle_tcp(addr: SocketAddr, stream: TcpStream, event_chan: Sender<Event>) {
+    // Splitting the stream for use later
     let (mut rd, wr) = stream.into_split();
-    let _ = event_chan
-        .send(Event::NewConnection { ip, out_stream: wr })
-        .await;
+
+    let mut in_buffer = [0; BUFF_SIZE];
+    let n_bytes = rd.read(&mut in_buffer).await;
+    match n_bytes {
+        Ok(n) => {
+            let Ok(msg_in) = serde_json::from_slice::<MsgIn>(&in_buffer[..n]) else {
+                return;
+            };
+            match msg_in {
+                MsgIn::Consumer { id, queues } => {
+                    println!("Consumer {id} connected from {addr}");
+                    let _ = event_chan
+                        .send(Event::NewConsumer {
+                            id,
+                            queues,
+                            out_stream: wr,
+                        })
+                        .await;
+                }
+                MsgIn::Producer { id } => {
+                    println!("Producer {id} connected from {addr}");
+                }
+                _ => {
+                    // quit the connection if the message is not a consumer or producer
+                    return;
+                }
+            }
+        }
+        _ => {
+            println!("did not receive any bytes");
+            return;
+        }
+    }
 
     loop {
         let mut in_buffer = [0; BUFF_SIZE];
@@ -42,69 +111,34 @@ async fn handle_incoming_connection(ip: SocketAddr, stream: TcpStream, event_cha
         match n_bytes {
             Err(_) => {
                 eprintln!("failed to read from TCP socket");
-                let _ = event_chan.send(Event::ConnectionDropped(ip)).await;
                 return;
             }
             Ok(0) => {
                 println!("socket is closed");
-                let _ = event_chan.send(Event::ConnectionDropped(ip)).await;
                 return;
             }
             Ok(n) => {
-                println!("read {n} bytes");
                 let Ok(msg_in) = serde_json::from_slice::<MsgIn>(&in_buffer[..n]) else {
-                    let _ = event_chan.send(Event::BadMessage(ip)).await;
                     continue;
                 };
-                let _ = event_chan
-                    .send(Event::NewMessage {
-                        sender: ip,
-                        msg: msg_in,
-                    })
-                    .await;
+                match msg_in {
+                    MsgIn::Data {
+                        queue,
+                        sender,
+                        body,
+                    } => {
+                        println!("Data from {sender} to {queue}: {body}");
+                        let _ = event_chan
+                            .send(Event::NewMessage(MsgIn::Data {
+                                queue,
+                                sender,
+                                body,
+                            }))
+                            .await;
+                    }
+                    _ => (), // ignore other message types
+                }
             }
         }
     }
-}
-
-async fn handle_inbound_messages(mut event_chan: Receiver<Event>) {
-    let mut queues: Box<HashMap<String, Vec<String>>> = Box::new(HashMap::new());
-    let mut connections: Box<HashMap<SocketAddr, OwnedWriteHalf>> = Box::new(HashMap::new());
-
-    println!("starting WMQ Server");
-    while let Some(event) = event_chan.recv().await {
-        match event {
-            Event::NewConnection { ip, out_stream } => {
-                connections.insert(ip, out_stream);
-            }
-            Event::NewMessage { sender, msg } => {
-                let q = queues.get_mut(&msg.queue);
-                match q {
-                    None => {
-                        queues.insert(msg.queue, vec![msg.body]);
-                    }
-                    Some(v) => {
-                        let mut tmp = vec![msg.body];
-                        v.append(&mut tmp);
-                    }
-                }
-                match connections.get_mut(&sender) {
-                    Some(s) => {
-                        let _ = s.write(ACK.as_bytes()).await;
-                    }
-                    None => (),
-                }
-            }
-            Event::BadMessage(sender) => match connections.get_mut(&sender) {
-                Some(s) => {
-                    let _ = s.write(NACK.as_bytes()).await;
-                }
-                None => (),
-            },
-            Event::ConnectionDropped(sock_addr) => {
-                connections.remove(&sock_addr);
-            }
-        }
-    }
-    println!("stopping WMQ Server");
 }

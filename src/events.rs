@@ -1,25 +1,12 @@
-use std::net::SocketAddr;
-
-use serde::{Deserialize, Serialize};
 use tokio::net::tcp::OwnedWriteHalf;
 
-#[derive(Debug)]
+use crate::messages::MsgIn;
+
 pub enum Event {
-    NewConnection {
-        ip: SocketAddr,
+    NewConsumer {
+        id: String,
+        queues: Vec<String>,
         out_stream: OwnedWriteHalf,
     },
-    NewMessage {
-        sender: SocketAddr,
-        msg: MsgIn,
-    },
-    BadMessage(SocketAddr),
-    ConnectionDropped(SocketAddr),
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct MsgIn {
-    pub queue: String,
-    pub sender: String,
-    pub body: String,
+    NewMessage(MsgIn),
 }

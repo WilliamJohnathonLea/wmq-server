@@ -1,19 +1,18 @@
+mod command;
 mod consumer;
 mod events;
-mod messages;
+mod message;
 
 use std::{collections::HashMap, env, error::Error, net::SocketAddr};
 
+use command::Command;
 use consumer::Consumer;
 use events::Event;
-use messages::MsgIn;
+use message::Message;
 use tokio::{
     io::AsyncReadExt,
-    net::{TcpListener, TcpStream},
-    sync::{
-        broadcast,
-        mpsc::{self, Receiver, Sender},
-    },
+    net::{TcpListener, TcpStream, tcp::OwnedWriteHalf},
+    sync::{broadcast, mpsc},
 };
 
 const BUFF_SIZE: usize = 512 * 1024;
@@ -36,74 +35,40 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 }
 
-async fn handle_events(mut event_chan: Receiver<Event>) {
-    let mut queue_map = HashMap::<String, broadcast::Sender<MsgIn>>::new();
+async fn handle_events(mut event_chan: mpsc::Receiver<Event>) {
+    let mut unassigned_conns = HashMap::<SocketAddr, OwnedWriteHalf>::new();
+    let mut queue_map = HashMap::<String, broadcast::Sender<Message>>::new();
 
-    let (tx, _) = broadcast::channel::<MsgIn>(20);
     while let Some(event) = event_chan.recv().await {
         match event {
-            Event::NewConsumer {
-                id,
-                queues,
-                out_stream,
-            } => {
-                for queue in queues {
-                    if !queue_map.contains_key(&queue) {
-                        queue_map.insert(queue, tx.clone());
-                    }
-                }
-                let consumer = Consumer::new(out_stream, tx.subscribe());
-                tokio::spawn(consumer.consume());
-                // FIXME: acks should not be sent to all consumers
-                let _ = tx.send(MsgIn::Data {
-                    queue: "queue1".to_string(),
-                    sender: "producer1".to_string(),
-                    body: "hello".to_string(),
-                });
+            Event::NewConnection { addr, out_stream } => {
+                unassigned_conns.insert(addr, out_stream);
             }
-            Event::NewMessage(msg_in) => {
-                println!("received message: {msg_in:?}");
+            Event::ConsumerAssigned { addr, queue } => {
+                if !unassigned_conns.contains_key(&addr) {
+                    eprintln!("connection not found");
+                    continue;
+                }
+                if let Some(sender) = queue_map.get(&queue) {
+                    let rx = sender.subscribe();
+                    let out_stream = unassigned_conns.remove(&addr).unwrap();
+                    let consumer = Consumer::new(out_stream, rx);
+                    tokio::spawn(consumer.consume());
+                }
             }
         }
     }
 }
 
-async fn handle_tcp(addr: SocketAddr, stream: TcpStream, event_chan: Sender<Event>) {
+async fn handle_tcp(addr: SocketAddr, stream: TcpStream, event_chan: mpsc::Sender<Event>) {
     // Splitting the stream for use later
     let (mut rd, wr) = stream.into_split();
-
-    let mut in_buffer = [0; BUFF_SIZE];
-    let n_bytes = rd.read(&mut in_buffer).await;
-    match n_bytes {
-        Ok(n) => {
-            let Ok(msg_in) = serde_json::from_slice::<MsgIn>(&in_buffer[..n]) else {
-                return;
-            };
-            match msg_in {
-                MsgIn::Consumer { id, queues } => {
-                    println!("Consumer {id} connected from {addr}");
-                    let _ = event_chan
-                        .send(Event::NewConsumer {
-                            id,
-                            queues,
-                            out_stream: wr,
-                        })
-                        .await;
-                }
-                MsgIn::Producer { id } => {
-                    println!("Producer {id} connected from {addr}");
-                }
-                _ => {
-                    // quit the connection if the message is not a consumer or producer
-                    return;
-                }
-            }
-        }
-        _ => {
-            println!("did not receive any bytes");
-            return;
-        }
-    }
+    let _ = event_chan
+        .send(Event::NewConnection {
+            addr,
+            out_stream: wr,
+        })
+        .await;
 
     loop {
         let mut in_buffer = [0; BUFF_SIZE];
@@ -118,26 +83,10 @@ async fn handle_tcp(addr: SocketAddr, stream: TcpStream, event_chan: Sender<Even
                 return;
             }
             Ok(n) => {
-                let Ok(msg_in) = serde_json::from_slice::<MsgIn>(&in_buffer[..n]) else {
+                let Ok(msg_in) = serde_json::from_slice::<Command>(&in_buffer[..n]) else {
                     continue;
                 };
-                match msg_in {
-                    MsgIn::Data {
-                        queue,
-                        sender,
-                        body,
-                    } => {
-                        println!("Data from {sender} to {queue}: {body}");
-                        let _ = event_chan
-                            .send(Event::NewMessage(MsgIn::Data {
-                                queue,
-                                sender,
-                                body,
-                            }))
-                            .await;
-                    }
-                    _ => (), // ignore other message types
-                }
+                // let _ = event_chan.send(Event::CommandReceived(msg_in)).await;
             }
         }
     }

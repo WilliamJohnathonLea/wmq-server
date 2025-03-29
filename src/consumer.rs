@@ -1,14 +1,14 @@
 use tokio::{io::AsyncWriteExt, net::tcp::OwnedWriteHalf, sync::broadcast::Receiver};
 
-use crate::messages::MsgIn;
+use crate::message::Message;
 
 pub struct Consumer {
     out_stream: OwnedWriteHalf,
-    rx: Receiver<MsgIn>,
+    rx: Receiver<Message>,
 }
 
 impl Consumer {
-    pub fn new(out_stream: OwnedWriteHalf, rx: Receiver<MsgIn>) -> Self {
+    pub fn new(out_stream: OwnedWriteHalf, rx: Receiver<Message>) -> Self {
         Consumer { out_stream, rx }
     }
 

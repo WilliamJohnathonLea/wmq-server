@@ -1,12 +1,14 @@
+use std::net::SocketAddr;
+
 use tokio::net::tcp::OwnedWriteHalf;
 
-use crate::messages::MsgIn;
-
 pub enum Event {
-    NewConsumer {
-        id: String,
-        queues: Vec<String>,
+    NewConnection {
+        addr: SocketAddr,
         out_stream: OwnedWriteHalf,
     },
-    NewMessage(MsgIn),
+    ConsumerAssigned {
+        addr: SocketAddr,
+        queue: String,
+    },
 }

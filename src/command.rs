@@ -5,7 +5,7 @@ use crate::message::Message;
 #[derive(Debug, Deserialize, PartialEq)]
 #[serde(tag = "type")]
 pub enum Command {
-    AssignConsumer,
+    AssignConsumer { id: String },
     AssignQueue { name: String },
     DeclareQueue { name: String },
     DeleteQueue { name: String },
@@ -18,8 +18,8 @@ mod tests {
 
     #[test]
     fn test_deserialize_assign_consumer() -> Result<(), serde_json::Error> {
-        let cmd = r#"{"type": "AssignConsumer"}"#;
-        let expected = Command::AssignConsumer;
+        let cmd = r#"{"type": "AssignConsumer", "id": "my_id"}"#;
+        let expected = Command::AssignConsumer { id: "my_id".into() };
         let actual = serde_json::from_str::<Command>(cmd)?;
         assert_eq!(expected, actual);
         Ok(())

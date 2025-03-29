@@ -16,8 +16,6 @@ use tokio::{
 };
 
 const BUFF_SIZE: usize = 512 * 1024;
-// const ACK: &str = "ACK";
-// const NACK: &str = "NACK";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -37,6 +35,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 async fn handle_events(mut event_chan: mpsc::Receiver<Event>) {
     let mut unassigned_conns = HashMap::<SocketAddr, OwnedWriteHalf>::new();
+    let mut consumers = HashMap::<String, Consumer>::new();
     let mut queue_map = HashMap::<String, broadcast::Sender<Message>>::new();
 
     while let Some(event) = event_chan.recv().await {
@@ -44,17 +43,29 @@ async fn handle_events(mut event_chan: mpsc::Receiver<Event>) {
             Event::NewConnection { addr, out_stream } => {
                 unassigned_conns.insert(addr, out_stream);
             }
-            Event::ConsumerAssigned { addr, queue } => {
+            Event::ConsumerAssigned { addr, id } => {
                 if !unassigned_conns.contains_key(&addr) {
                     eprintln!("connection not found");
                     continue;
                 }
-                if let Some(sender) = queue_map.get(&queue) {
-                    let rx = sender.subscribe();
-                    let out_stream = unassigned_conns.remove(&addr).unwrap();
-                    let consumer = Consumer::new(out_stream, rx);
-                    tokio::spawn(consumer.consume());
+                let out_stream = unassigned_conns.remove(&addr).unwrap();
+                let consumer = Consumer::new(out_stream);
+                consumers.insert(id, consumer);
+            }
+            Event::QueueAssigned { consumer_id, queue } => {
+                if let Some(c) = consumers.get_mut(&consumer_id) {
+                    if let Some(q) = queue_map.get(&queue) {
+                        let rx = q.subscribe();
+                        c.add_queue(rx);
+                    }
                 }
+            }
+            Event::QueueDeclared { queue_name } => {
+                if queue_map.contains_key(&queue_name) {
+                    continue;
+                }
+                let (tx, _) = broadcast::channel::<Message>(20);
+                queue_map.insert(queue_name, tx);
             }
         }
     }

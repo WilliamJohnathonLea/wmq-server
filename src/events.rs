@@ -9,6 +9,13 @@ pub enum Event {
     },
     ConsumerAssigned {
         addr: SocketAddr,
+        id: String,
+    },
+    QueueAssigned {
+        consumer_id: String,
         queue: String,
+    },
+    QueueDeclared {
+        queue_name: String,
     },
 }

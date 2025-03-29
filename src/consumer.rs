@@ -4,19 +4,19 @@ use crate::message::Message;
 
 pub struct Consumer {
     out_stream: OwnedWriteHalf,
-    rx: Receiver<Message>,
+    queues: Vec<Receiver<Message>>,
 }
 
 impl Consumer {
-    pub fn new(out_stream: OwnedWriteHalf, rx: Receiver<Message>) -> Self {
-        Consumer { out_stream, rx }
+    pub fn new(out_stream: OwnedWriteHalf) -> Self {
+        Consumer { out_stream, queues: Vec::new() }
     }
 
-    pub async fn consume(mut self) {
-        while let Ok(msg) = self.rx.recv().await {
-            println!("sending message to consumer");
-            let msg = serde_json::to_string(&msg).unwrap();
-            let _ = self.out_stream.write(msg.as_bytes()).await;
-        }
+    pub async fn consume(&mut self) {
+        
+    }
+    
+    pub fn add_queue(&mut self, rx: Receiver<Message>) {
+        self.queues.push(rx);
     }
 }

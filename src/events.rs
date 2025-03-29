@@ -2,6 +2,8 @@ use std::net::SocketAddr;
 
 use tokio::net::tcp::OwnedWriteHalf;
 
+use crate::message::Message;
+
 pub enum Event {
     NewConnection {
         addr: SocketAddr,
@@ -18,4 +20,8 @@ pub enum Event {
     QueueDeclared {
         queue_name: String,
     },
+    MessageReceived {
+        queue_name: String,
+        message: Message,
+    }
 }

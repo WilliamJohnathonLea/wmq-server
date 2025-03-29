@@ -67,6 +67,11 @@ async fn handle_events(mut event_chan: mpsc::Receiver<Event>) {
                 let (tx, _) = broadcast::channel::<Message>(20);
                 queue_map.insert(queue_name, tx);
             }
+            Event::MessageReceived { queue_name, message } => {
+                if let Some(q) = queue_map.get(&queue_name) {
+                    let _ = q.send(message);
+                }
+            }
         }
     }
 }
@@ -94,7 +99,7 @@ async fn handle_tcp(addr: SocketAddr, stream: TcpStream, event_chan: mpsc::Sende
                 return;
             }
             Ok(n) => {
-                let Ok(msg_in) = serde_json::from_slice::<Command>(&in_buffer[..n]) else {
+                let Ok(_msg_in) = serde_json::from_slice::<Command>(&in_buffer[..n]) else {
                     continue;
                 };
                 // let _ = event_chan.send(Event::CommandReceived(msg_in)).await;

@@ -99,11 +99,16 @@ async fn handle_tcp(addr: SocketAddr, stream: TcpStream, event_chan: mpsc::Sende
                 return;
             }
             Ok(n) => {
-                let Ok(_msg_in) = serde_json::from_slice::<Command>(&in_buffer[..n]) else {
+                let Ok(cmd) = serde_json::from_slice::<Command>(&in_buffer[..n]) else {
                     continue;
                 };
-                // let _ = event_chan.send(Event::CommandReceived(msg_in)).await;
+                handle_command(cmd, addr, event_chan.clone());
             }
         }
     }
+}
+
+fn handle_command(cmd: Command, addr: SocketAddr, event_chan: mpsc::Sender<Event>) {
+    let event = Event::from_network_command(cmd, addr);
+    let _ = event_chan.send(event);
 }

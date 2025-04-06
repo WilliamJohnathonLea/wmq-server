@@ -6,9 +6,9 @@ use crate::message::Message;
 #[serde(tag = "type")]
 pub enum Command {
     AssignConsumer { id: String },
+    StartConsumer { id: String },
     AssignQueue { consumer_id: String, queue: String },
     DeclareQueue { name: String },
-    DeleteQueue { name: String },
     SendMessage { queue: String, msg: Message },
 }
 
@@ -20,6 +20,15 @@ mod tests {
     fn test_deserialize_assign_consumer() -> Result<(), serde_json::Error> {
         let cmd = r#"{"type": "AssignConsumer", "id": "my_id"}"#;
         let expected = Command::AssignConsumer { id: "my_id".into() };
+        let actual = serde_json::from_str::<Command>(cmd)?;
+        assert_eq!(expected, actual);
+        Ok(())
+    }
+    
+    #[test]
+    fn test_deserialize_start_consumer() -> Result<(), serde_json::Error> {
+        let cmd = r#"{"type": "StartConsumer", "id": "my_id"}"#;
+        let expected = Command::StartConsumer { id: "my_id".into() };
         let actual = serde_json::from_str::<Command>(cmd)?;
         assert_eq!(expected, actual);
         Ok(())
@@ -41,17 +50,6 @@ mod tests {
     fn test_deserialize_declare_queue() -> Result<(), serde_json::Error> {
         let cmd = r#"{"type": "DeclareQueue", "name": "test"}"#;
         let expected = Command::DeclareQueue {
-            name: "test".into(),
-        };
-        let actual = serde_json::from_str::<Command>(cmd)?;
-        assert_eq!(expected, actual);
-        Ok(())
-    }
-
-    #[test]
-    fn test_deserialize_delete_queue() -> Result<(), serde_json::Error> {
-        let cmd = r#"{"type": "DeleteQueue", "name": "test"}"#;
-        let expected = Command::DeleteQueue {
             name: "test".into(),
         };
         let actual = serde_json::from_str::<Command>(cmd)?;

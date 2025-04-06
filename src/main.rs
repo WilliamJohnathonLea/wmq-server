@@ -52,6 +52,15 @@ async fn handle_events(mut event_chan: mpsc::Receiver<Event>) {
                 let consumer = Consumer::new(out_stream);
                 consumers.insert(id, consumer);
             }
+            Event::ConsumerStarted { id } => {
+                // FIXME: removing a consumer allows consumers to have the same id
+                //        after starting a consumer.
+                if let Some(mut consumer) = consumers.remove(&id) {
+                    tokio::spawn(async move {
+                        consumer.consume().await;
+                    });
+                }
+            }
             Event::QueueAssigned { consumer_id, queue } => {
                 if let Some(c) = consumers.get_mut(&consumer_id) {
                     if let Some(q) = queue_map.get(&queue) {
@@ -67,7 +76,10 @@ async fn handle_events(mut event_chan: mpsc::Receiver<Event>) {
                 let (tx, _) = broadcast::channel::<Message>(20);
                 queue_map.insert(queue_name, tx);
             }
-            Event::MessageReceived { queue_name, message } => {
+            Event::MessageReceived {
+                queue_name,
+                message,
+            } => {
                 if let Some(q) = queue_map.get(&queue_name) {
                     let _ = q.send(message);
                 }
@@ -100,15 +112,16 @@ async fn handle_tcp(addr: SocketAddr, stream: TcpStream, event_chan: mpsc::Sende
             }
             Ok(n) => {
                 let Ok(cmd) = serde_json::from_slice::<Command>(&in_buffer[..n]) else {
+                    eprintln!("something went wrong receiving a message");
                     continue;
                 };
-                handle_command(cmd, addr, event_chan.clone());
+                handle_command(cmd, addr, event_chan.clone()).await;
             }
         }
     }
 }
 
-fn handle_command(cmd: Command, addr: SocketAddr, event_chan: mpsc::Sender<Event>) {
+async fn handle_command(cmd: Command, addr: SocketAddr, event_chan: mpsc::Sender<Event>) {
     let event = Event::from_network_command(cmd, addr);
-    let _ = event_chan.send(event);
+    let _ = event_chan.send(event).await;
 }

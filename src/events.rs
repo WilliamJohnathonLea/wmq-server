@@ -13,6 +13,9 @@ pub enum Event {
         addr: SocketAddr,
         id: String,
     },
+    ConsumerStarted {
+        id: String,
+    },
     QueueAssigned {
         consumer_id: String,
         queue: String,
@@ -30,11 +33,11 @@ impl Event {
     pub fn from_network_command(cmd: Command, addr: SocketAddr) -> Event {
         match cmd {
             Command::AssignConsumer { id } => Event::ConsumerAssigned { addr, id },
+            Command::StartConsumer { id } => Event::ConsumerStarted { id },
             Command::AssignQueue { consumer_id, queue } => {
                 Event::QueueAssigned { consumer_id, queue }
             }
             Command::DeclareQueue { name } => Event::QueueDeclared { queue_name: name },
-            Command::DeleteQueue { name } => todo!(),
             Command::SendMessage { queue, msg } => Event::MessageReceived {
                 queue_name: queue,
                 message: msg,
@@ -65,6 +68,23 @@ mod tests {
                 id: actual_id,
             } => {
                 assert_eq!(addr, actual_addr);
+                assert_eq!(id, actual_id);
+                Ok(())
+            }
+            _ => Err(()),
+        }
+    }
+
+    #[test]
+    fn consumer_started_from_command() -> Result<(), ()> {
+        let addr: SocketAddr = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8080).into();
+        let id = "test".to_string();
+        let cmd = Command::StartConsumer { id: id.clone() };
+
+        let actual = Event::from_network_command(cmd, addr);
+
+        match actual {
+            Event::ConsumerStarted { id: actual_id } => {
                 assert_eq!(id, actual_id);
                 Ok(())
             }

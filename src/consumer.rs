@@ -15,7 +15,7 @@ impl Consumer {
         }
     }
 
-    pub async fn consume(&mut self) {
+    pub async fn consume(mut self) {
         loop {
             // TODO: loop over all queues
             let msg = self.queues[0].recv().await.unwrap();

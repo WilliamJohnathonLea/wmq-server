@@ -55,10 +55,8 @@ async fn handle_events(mut event_chan: mpsc::Receiver<Event>) {
             Event::ConsumerStarted { id } => {
                 // FIXME: removing a consumer allows consumers to have the same id
                 //        after starting a consumer.
-                if let Some(mut consumer) = consumers.remove(&id) {
-                    tokio::spawn(async move {
-                        consumer.consume().await;
-                    });
+                if let Some(consumer) = consumers.remove(&id) {
+                    tokio::spawn(consumer.consume());
                 }
             }
             Event::QueueAssigned { consumer_id, queue } => {

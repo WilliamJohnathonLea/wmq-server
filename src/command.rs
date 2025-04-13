@@ -7,6 +7,7 @@ use crate::message::Message;
 pub enum Command {
     AssignConsumer { id: String },
     StartConsumer { id: String },
+    AssignProducer { id: String },
     AssignQueue { consumer_id: String, queue: String },
     DeclareQueue { name: String },
     SendMessage { queue: String, msg: Message },
@@ -29,6 +30,15 @@ mod tests {
     fn test_deserialize_start_consumer() -> Result<(), serde_json::Error> {
         let cmd = r#"{"type": "StartConsumer", "id": "my_id"}"#;
         let expected = Command::StartConsumer { id: "my_id".into() };
+        let actual = serde_json::from_str::<Command>(cmd)?;
+        assert_eq!(expected, actual);
+        Ok(())
+    }
+    
+    #[test]
+    fn test_deserialize_assign_producer() -> Result<(), serde_json::Error> {
+        let cmd = r#"{"type": "AssignProducer", "id": "my_id"}"#;
+        let expected = Command::AssignProducer { id: "my_id".into() };
         let actual = serde_json::from_str::<Command>(cmd)?;
         assert_eq!(expected, actual);
         Ok(())

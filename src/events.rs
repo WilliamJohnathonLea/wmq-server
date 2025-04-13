@@ -16,6 +16,10 @@ pub enum Event {
     ConsumerStarted {
         id: String,
     },
+    ProducerAssigned {
+        addr: SocketAddr,
+        id: String,
+    },
     QueueAssigned {
         consumer_id: String,
         queue: String,
@@ -34,6 +38,7 @@ impl Event {
         match cmd {
             Command::AssignConsumer { id } => Event::ConsumerAssigned { addr, id },
             Command::StartConsumer { id } => Event::ConsumerStarted { id },
+            Command::AssignProducer { id } => Event::ProducerAssigned { addr, id },
             Command::AssignQueue { consumer_id, queue } => {
                 Event::QueueAssigned { consumer_id, queue }
             }
@@ -85,6 +90,24 @@ mod tests {
 
         match actual {
             Event::ConsumerStarted { id: actual_id } => {
+                assert_eq!(id, actual_id);
+                Ok(())
+            }
+            _ => Err(()),
+        }
+    }
+    
+    #[test]
+    fn producer_assigned_from_command() -> Result<(), ()> {
+        let addr: SocketAddr = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8080).into();
+        let id = "test".to_string();
+        let cmd = Command::AssignProducer { id: id.clone() };
+
+        let actual = Event::from_network_command(cmd, addr);
+
+        match actual {
+            Event::ProducerAssigned { addr: actual_addr, id: actual_id } => {
+                assert_eq!(addr, actual_addr);
                 assert_eq!(id, actual_id);
                 Ok(())
             }

@@ -36,6 +36,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 async fn handle_events(mut event_chan: mpsc::Receiver<Event>) {
     let mut unassigned_conns = HashMap::<SocketAddr, OwnedWriteHalf>::new();
     let mut consumers = HashMap::<String, Consumer>::new();
+    let mut producers = HashMap::<String, OwnedWriteHalf>::new();
     let mut queue_map = HashMap::<String, broadcast::Sender<Message>>::new();
 
     while let Some(event) = event_chan.recv().await {
@@ -59,6 +60,14 @@ async fn handle_events(mut event_chan: mpsc::Receiver<Event>) {
                     tokio::spawn(consumer.consume());
                 }
             }
+            Event::ProducerAssigned { addr, id } => {
+                if !unassigned_conns.contains_key(&addr) {
+                    eprintln!("connection not found");
+                    continue;
+                }
+                let out_stream = unassigned_conns.remove(&addr).unwrap();
+                producers.insert(id, out_stream);
+            },
             Event::QueueAssigned { consumer_id, queue } => {
                 if let Some(c) = consumers.get_mut(&consumer_id) {
                     if let Some(q) = queue_map.get(&queue) {
@@ -78,6 +87,7 @@ async fn handle_events(mut event_chan: mpsc::Receiver<Event>) {
                 queue_name,
                 message,
             } => {
+                // TODO only allow assigned producers to send messages
                 if let Some(q) = queue_map.get(&queue_name) {
                     let _ = q.send(message);
                 }

@@ -10,12 +10,15 @@ use consumer::Consumer;
 use events::Event;
 use message::Message;
 use tokio::{
-    io::AsyncReadExt,
+    io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream, tcp::OwnedWriteHalf},
     sync::{broadcast, mpsc},
 };
 
 const BUFF_SIZE: usize = 512 * 1024;
+
+const ACK: &[u8] = "ACK".as_bytes();
+const NACK: &[u8] = "NACK".as_bytes();
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -67,7 +70,7 @@ async fn handle_events(mut event_chan: mpsc::Receiver<Event>) {
                 }
                 let out_stream = unassigned_conns.remove(&addr).unwrap();
                 producers.insert(id, out_stream);
-            },
+            }
             Event::QueueAssigned { consumer_id, queue } => {
                 if let Some(c) = consumers.get_mut(&consumer_id) {
                     if let Some(q) = queue_map.get(&queue) {
@@ -85,11 +88,24 @@ async fn handle_events(mut event_chan: mpsc::Receiver<Event>) {
             }
             Event::MessageReceived {
                 queue_name,
+                producer_id,
                 message,
             } => {
-                // TODO only allow assigned producers to send messages
-                if let Some(q) = queue_map.get(&queue_name) {
-                    let _ = q.send(message);
+                if let Some(conn) = producers.get_mut(&producer_id) {
+                    if let Some(q) = queue_map.get(&queue_name) {
+                        let published = q.send(message).is_ok();
+                        if published {
+                            let _ = conn.write(ACK).await;
+                        } else {
+                            let _ = conn
+                                .write(nack_msg("failed to publish message").as_slice())
+                                .await;
+                        }
+                    } else {
+                        let _ = conn
+                            .write(nack_msg("queue does not exist").as_slice())
+                            .await;
+                    }
                 }
             }
         }
@@ -132,4 +148,8 @@ async fn handle_tcp(addr: SocketAddr, stream: TcpStream, event_chan: mpsc::Sende
 async fn handle_command(cmd: Command, addr: SocketAddr, event_chan: mpsc::Sender<Event>) {
     let event = Event::from_network_command(cmd, addr);
     let _ = event_chan.send(event).await;
+}
+
+fn nack_msg(msg: &str) -> Vec<u8> {
+    [NACK, format!(":{msg}").as_bytes()].concat()
 }

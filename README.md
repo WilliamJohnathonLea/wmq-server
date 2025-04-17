@@ -56,5 +56,5 @@ Assigns a queue to a consumer.
 ### SendMessage
 Send a message to a queue.
 ```json
-{"type": "SendMessage", "queue": "test", "msg": {"sender": "producer1", "body": "hello"}}
+{"type": "SendMessage", "queue": "test", "producer_id": "my_id", "msg": {"sender": "producer1", "body": "hello"}}
 ```

@@ -29,6 +29,7 @@ pub enum Event {
     },
     MessageReceived {
         queue_name: String,
+        producer_id: String,
         message: Message,
     },
 }
@@ -43,8 +44,13 @@ impl Event {
                 Event::QueueAssigned { consumer_id, queue }
             }
             Command::DeclareQueue { name } => Event::QueueDeclared { queue_name: name },
-            Command::SendMessage { queue, msg } => Event::MessageReceived {
+            Command::SendMessage {
+                queue,
+                producer_id,
+                msg,
+            } => Event::MessageReceived {
                 queue_name: queue,
+                producer_id,
                 message: msg,
             },
         }
@@ -96,7 +102,7 @@ mod tests {
             _ => Err(()),
         }
     }
-    
+
     #[test]
     fn producer_assigned_from_command() -> Result<(), ()> {
         let addr: SocketAddr = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8080).into();
@@ -106,7 +112,10 @@ mod tests {
         let actual = Event::from_network_command(cmd, addr);
 
         match actual {
-            Event::ProducerAssigned { addr: actual_addr, id: actual_id } => {
+            Event::ProducerAssigned {
+                addr: actual_addr,
+                id: actual_id,
+            } => {
                 assert_eq!(addr, actual_addr);
                 assert_eq!(id, actual_id);
                 Ok(())
@@ -165,12 +174,14 @@ mod tests {
     fn message_received_from_command() -> Result<(), ()> {
         let addr: SocketAddr = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8080).into();
         let queue = "test_queue".to_string();
+        let producer_id = "producer1".to_string();
         let msg = Message {
-            sender: "producer1".into(),
+            sender: producer_id.clone(),
             body: "hello".into(),
         };
         let cmd = Command::SendMessage {
             queue: queue.clone(),
+            producer_id: producer_id.clone(),
             msg: msg.clone(),
         };
 
@@ -179,9 +190,11 @@ mod tests {
         match actual {
             Event::MessageReceived {
                 queue_name: actual_queue,
+                producer_id: actual_producer_id,
                 message: actual_message,
             } => {
                 assert_eq!(queue, actual_queue);
+                assert_eq!(producer_id, actual_producer_id);
                 assert_eq!(msg, actual_message);
                 Ok(())
             }

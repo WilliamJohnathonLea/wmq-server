@@ -1,14 +1,12 @@
 mod command;
 mod consumer;
 mod events;
-mod message;
 
 use std::{collections::HashMap, env, error::Error, net::SocketAddr};
 
 use command::Command;
 use consumer::Consumer;
 use events::Event;
-use message::Message;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream, tcp::OwnedWriteHalf},
@@ -41,7 +39,7 @@ async fn handle_events(mut event_chan: mpsc::Receiver<Event>) {
     let mut unassigned_conns = HashMap::<SocketAddr, OwnedWriteHalf>::new();
     let mut consumers = HashMap::<String, Consumer>::new();
     let mut producers = HashMap::<String, OwnedWriteHalf>::new();
-    let mut queue_map = HashMap::<String, broadcast::Sender<Message>>::new();
+    let mut queue_map = HashMap::<String, broadcast::Sender<serde_json::Value>>::new();
 
     while let Some(event) = event_chan.recv().await {
         match event {
@@ -87,7 +85,7 @@ async fn handle_events(mut event_chan: mpsc::Receiver<Event>) {
                 if size > MAX_QUEUE_SIZE {
                     continue;
                 }
-                let (tx, _) = broadcast::channel::<Message>(size);
+                let (tx, _) = broadcast::channel::<serde_json::Value>(size);
                 queue_map.insert(queue_name, tx);
             }
             Event::MessageReceived {

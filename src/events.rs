@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use tokio::net::tcp::OwnedWriteHalf;
 
-use crate::{command::Command, message::Message};
+use crate::command::Command;
 
 pub enum Event {
     NewConnection {
@@ -31,7 +31,7 @@ pub enum Event {
     MessageReceived {
         queue_name: String,
         producer_id: String,
-        message: Message,
+        message: serde_json::Value,
     },
 }
 
@@ -65,7 +65,7 @@ impl Event {
 mod tests {
     use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 
-    use crate::{command::Command, message::Message};
+    use crate::command::Command;
 
     use super::Event;
 
@@ -182,10 +182,7 @@ mod tests {
         let addr: SocketAddr = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8080).into();
         let queue = "test_queue".to_string();
         let producer_id = "producer1".to_string();
-        let msg = Message {
-            sender: producer_id.clone(),
-            body: "hello".into(),
-        };
+        let msg = serde_json::Value::String("hello".to_string());
         let cmd = Command::SendMessage {
             queue: queue.clone(),
             producer_id: producer_id.clone(),

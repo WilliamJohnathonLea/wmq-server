@@ -1,7 +1,5 @@
 use serde::Deserialize;
 
-use crate::message::Message;
-
 #[derive(Debug, Deserialize, PartialEq)]
 #[serde(tag = "type")]
 pub enum Command {
@@ -25,7 +23,7 @@ pub enum Command {
     SendMessage {
         queue: String,
         producer_id: String,
-        msg: Message,
+        msg: serde_json::Value,
     },
 }
 
@@ -87,10 +85,7 @@ mod tests {
     #[test]
     fn test_deserialize_send_message() -> Result<(), serde_json::Error> {
         let cmd = r#"{"type": "SendMessage", "queue": "test", "producer_id": "producer1", "msg": {"sender": "producer1", "body": "hello"}}"#;
-        let msg = Message {
-            sender: "producer1".into(),
-            body: "hello".into(),
-        };
+        let msg = serde_json::json!({"sender": "producer1", "body": "hello"});
         let expected = Command::SendMessage {
             queue: "test".into(),
             producer_id: "producer1".into(),

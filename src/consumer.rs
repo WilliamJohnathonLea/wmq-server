@@ -1,13 +1,11 @@
 use tokio::{io::AsyncWriteExt, net::tcp::OwnedWriteHalf, sync::broadcast::Receiver};
 
-use crate::message::Message;
-
 use futures::stream::{SelectAll, StreamExt};
 use tokio_stream::wrappers::BroadcastStream;
 
 pub struct Consumer {
     out_stream: OwnedWriteHalf,
-    queues: Vec<Receiver<Message>>,
+    queues: Vec<Receiver<serde_json::Value>>,
 }
 
 impl Consumer {
@@ -30,7 +28,7 @@ impl Consumer {
         }
     }
 
-    pub fn add_queue(&mut self, rx: Receiver<Message>) {
+    pub fn add_queue(&mut self, rx: Receiver<serde_json::Value>) {
         self.queues.push(rx);
     }
 }

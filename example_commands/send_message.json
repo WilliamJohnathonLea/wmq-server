@@ -1,1 +1,0 @@
-{"type": "SendMessage", "queue": "test", "msg": {"sender": "producer1", "body": "hello"}}

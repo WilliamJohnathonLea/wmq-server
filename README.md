@@ -10,7 +10,11 @@ Will's Message Queue Server
 ```json
 {"type": "AssignConsumer", "id": "my_id"}
 ```
-3. Send the `StartConsumer` command to start the consumer
+3. Send the `AssignQueue` command to assign a queue to the consumer
+```json
+{"type": "AssignQueue", "consumer_id": "my_id", "queue": "test"}
+```
+4. Send the `StartConsumer` command to start the consumer
 ```json
 {"type": "StartConsumer", "id": "my_id"}
 ```
@@ -24,6 +28,16 @@ Will's Message Queue Server
 ```json
 {"type": "AssignProducer", "id": "my_id"}
 ```
+
+## Declaring a queue
+After connecting to the server, send the `DeclareQueue` command to declare a queue.
+```json
+{"type": "DeclareQueue", "name": "test"}
+```
+It is recommended to declare a queue from a consumer with the intention of consuming it.
+This because the queues are in-memory channels and
+if the channel has no consumers then writing to the queue will fail.
+However, it is possible to declare a queue from a producer.
 
 ## Commands
 Commands are sent from the client to set up consumers and producers and to send messages to a queue.

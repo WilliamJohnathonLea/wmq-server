@@ -2,6 +2,9 @@ use tokio::{io::AsyncWriteExt, net::tcp::OwnedWriteHalf, sync::broadcast::Receiv
 
 use crate::message::Message;
 
+use futures::stream::{SelectAll, StreamExt};
+use tokio_stream::wrappers::BroadcastStream;
+
 pub struct Consumer {
     out_stream: OwnedWriteHalf,
     queues: Vec<Receiver<Message>>,
@@ -16,11 +19,14 @@ impl Consumer {
     }
 
     pub async fn consume(mut self) {
-        loop {
-            // TODO: loop over all queues
-            let msg = self.queues[0].recv().await.unwrap();
-            let json = serde_json::to_string(&msg).unwrap();
-            self.out_stream.write(json.as_bytes()).await.unwrap();
+        let mut streams: SelectAll<_> = self.queues.into_iter().map(BroadcastStream::new).collect();
+
+        while let Some(result) = streams.next().await {
+            if let Ok(msg) = result {
+                if let Ok(json) = serde_json::to_string(&msg) {
+                    _ = self.out_stream.write(json.as_bytes()).await;
+                }
+            }
         }
     }
 

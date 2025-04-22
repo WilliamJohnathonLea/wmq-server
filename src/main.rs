@@ -93,13 +93,16 @@ async fn handle_events(mut event_chan: mpsc::Receiver<Event>) {
             } => {
                 if let Some(conn) = producers.get_mut(&producer_id) {
                     if let Some(q) = queue_map.get(&queue_name) {
-                        let published = q.send(message).is_ok();
-                        if published {
-                            let _ = conn.write(ACK).await;
-                        } else {
-                            let _ = conn
-                                .write(nack_msg("failed to publish message").as_slice())
-                                .await;
+                        match q.send(message) {
+                            Ok(_) => {
+                                let _ = conn.write(ACK).await;
+                            }
+                            Err(err) => {
+                                eprintln!("Failed to publish message: {}", err);
+                                let _ = conn
+                                    .write(nack_msg("failed to publish message").as_slice())
+                                    .await;
+                            }
                         }
                     } else {
                         let _ = conn

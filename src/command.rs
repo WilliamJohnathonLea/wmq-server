@@ -20,6 +20,7 @@ pub enum Command {
     },
     DeclareQueue {
         name: String,
+        size: usize,
     },
     SendMessage {
         queue: String,
@@ -73,9 +74,10 @@ mod tests {
 
     #[test]
     fn test_deserialize_declare_queue() -> Result<(), serde_json::Error> {
-        let cmd = r#"{"type": "DeclareQueue", "name": "test"}"#;
+        let cmd = r#"{"type": "DeclareQueue", "name": "test", "size": 100}"#;
         let expected = Command::DeclareQueue {
             name: "test".into(),
+            size: 100,
         };
         let actual = serde_json::from_str::<Command>(cmd)?;
         assert_eq!(expected, actual);

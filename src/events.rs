@@ -26,6 +26,7 @@ pub enum Event {
     },
     QueueDeclared {
         queue_name: String,
+        size: usize,
     },
     MessageReceived {
         queue_name: String,
@@ -43,7 +44,10 @@ impl Event {
             Command::AssignQueue { consumer_id, queue } => {
                 Event::QueueAssigned { consumer_id, queue }
             }
-            Command::DeclareQueue { name } => Event::QueueDeclared { queue_name: name },
+            Command::DeclareQueue { name, size } => Event::QueueDeclared {
+                queue_name: name,
+                size,
+            },
             Command::SendMessage {
                 queue,
                 producer_id,
@@ -155,6 +159,7 @@ mod tests {
         let queue = "test_queue".to_string();
         let cmd = Command::DeclareQueue {
             name: queue.clone(),
+            size: 100,
         };
 
         let actual = Event::from_network_command(cmd, addr);
@@ -162,8 +167,10 @@ mod tests {
         match actual {
             Event::QueueDeclared {
                 queue_name: actual_queue,
+                size: actual_size,
             } => {
                 assert_eq!(queue, actual_queue);
+                assert_eq!(100, actual_size);
                 Ok(())
             }
             _ => Err(()),

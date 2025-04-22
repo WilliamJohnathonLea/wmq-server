@@ -16,6 +16,7 @@ use tokio::{
 };
 
 const BUFF_SIZE: usize = 512 * 1024;
+const MAX_QUEUE_SIZE: usize = 5000;
 
 const ACK: &[u8] = "ACK".as_bytes();
 const NACK: &[u8] = "NACK".as_bytes();
@@ -79,11 +80,14 @@ async fn handle_events(mut event_chan: mpsc::Receiver<Event>) {
                     }
                 }
             }
-            Event::QueueDeclared { queue_name } => {
+            Event::QueueDeclared { queue_name, size } => {
                 if queue_map.contains_key(&queue_name) {
                     continue;
                 }
-                let (tx, _) = broadcast::channel::<Message>(20);
+                if size > MAX_QUEUE_SIZE {
+                    continue;
+                }
+                let (tx, _) = broadcast::channel::<Message>(size);
                 queue_map.insert(queue_name, tx);
             }
             Event::MessageReceived {

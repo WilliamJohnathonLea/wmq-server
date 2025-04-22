@@ -32,8 +32,10 @@ Will's Message Queue Server
 ## Declaring a queue
 After connecting to the server, send the `DeclareQueue` command to declare a queue.
 ```json
-{"type": "DeclareQueue", "name": "test"}
+{"type": "DeclareQueue", "name": "test", "size": 100}
 ```
+A queue can have a maximum size of 5000 messages.
+
 It is recommended to declare a queue from a consumer with the intention of consuming it.
 This because the queues are in-memory channels and
 if the channel has no consumers then writing to the queue will fail.
@@ -60,7 +62,7 @@ Assigns a connection as a producer.
 ### DeclareQueue
 Declares a queue. This can be done by either a consumer or a producer.
 ```json
-{"type": "DeclareQueue", "name": "test"}
+{"type": "DeclareQueue", "name": "test", "size": 5000}
 ```
 ### AssignQueue
 Assigns a queue to a consumer.

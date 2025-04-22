@@ -5,7 +5,7 @@ use tokio_stream::wrappers::BroadcastStream;
 
 pub struct Consumer {
     out_stream: OwnedWriteHalf,
-    queues: Vec<Receiver<serde_json::Value>>,
+    queues: Vec<Receiver<bytes::Bytes>>,
 }
 
 impl Consumer {
@@ -28,7 +28,7 @@ impl Consumer {
         }
     }
 
-    pub fn add_queue(&mut self, rx: Receiver<serde_json::Value>) {
+    pub fn add_queue(&mut self, rx: Receiver<bytes::Bytes>) {
         self.queues.push(rx);
     }
 }

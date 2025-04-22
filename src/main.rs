@@ -39,7 +39,7 @@ async fn handle_events(mut event_chan: mpsc::Receiver<Event>) {
     let mut unassigned_conns = HashMap::<SocketAddr, OwnedWriteHalf>::new();
     let mut consumers = HashMap::<String, Consumer>::new();
     let mut producers = HashMap::<String, OwnedWriteHalf>::new();
-    let mut queue_map = HashMap::<String, broadcast::Sender<serde_json::Value>>::new();
+    let mut queue_map = HashMap::<String, broadcast::Sender<bytes::Bytes>>::new();
 
     while let Some(event) = event_chan.recv().await {
         match event {
@@ -85,7 +85,7 @@ async fn handle_events(mut event_chan: mpsc::Receiver<Event>) {
                 if size > MAX_QUEUE_SIZE {
                     continue;
                 }
-                let (tx, _) = broadcast::channel::<serde_json::Value>(size);
+                let (tx, _) = broadcast::channel::<bytes::Bytes>(size);
                 queue_map.insert(queue_name, tx);
             }
             Event::MessageReceived {

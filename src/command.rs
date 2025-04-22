@@ -23,7 +23,7 @@ pub enum Command {
     SendMessage {
         queue: String,
         producer_id: String,
-        msg: serde_json::Value,
+        msg: bytes::Bytes,
     },
 }
 
@@ -84,8 +84,8 @@ mod tests {
 
     #[test]
     fn test_deserialize_send_message() -> Result<(), serde_json::Error> {
-        let cmd = r#"{"type": "SendMessage", "queue": "test", "producer_id": "producer1", "msg": {"sender": "producer1", "body": "hello"}}"#;
-        let msg = serde_json::json!({"sender": "producer1", "body": "hello"});
+        let cmd = r#"{"type": "SendMessage", "queue": "test", "producer_id": "producer1", "msg": "eyJzZW5kZXIiOiAicHJvZHVjZXIxIiwgImJvZHkiOiAiaGVsbG8ifQ=="}"#;
+        let msg = bytes::Bytes::from(r#"eyJzZW5kZXIiOiAicHJvZHVjZXIxIiwgImJvZHkiOiAiaGVsbG8ifQ=="#);
         let expected = Command::SendMessage {
             queue: "test".into(),
             producer_id: "producer1".into(),

@@ -31,7 +31,7 @@ pub enum Event {
     MessageReceived {
         queue_name: String,
         producer_id: String,
-        message: serde_json::Value,
+        message: bytes::Bytes,
     },
 }
 
@@ -182,7 +182,7 @@ mod tests {
         let addr: SocketAddr = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8080).into();
         let queue = "test_queue".to_string();
         let producer_id = "producer1".to_string();
-        let msg = serde_json::Value::String("hello".to_string());
+        let msg = bytes::Bytes::from("hello".to_string());
         let cmd = Command::SendMessage {
             queue: queue.clone(),
             producer_id: producer_id.clone(),

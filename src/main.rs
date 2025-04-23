@@ -1,6 +1,7 @@
 mod command;
 mod consumer;
 mod events;
+mod server;
 
 use std::{collections::HashMap, env, error::Error, net::SocketAddr};
 

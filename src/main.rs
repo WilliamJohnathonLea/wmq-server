@@ -22,6 +22,7 @@ const NACK: &[u8] = "NACK".as_bytes();
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     dotenvy::dotenv()?;
+    colog::init();
     let port = env::var("PORT")?;
     let listener = TcpListener::bind(format!("0.0.0.0:{port}")).await?;
     let (tx, rx) = mpsc::channel::<Event>(100);
@@ -151,16 +152,16 @@ async fn handle_tcp(addr: SocketAddr, stream: TcpStream, event_chan: mpsc::Sende
         let n_bytes = rd.read(&mut in_buffer).await;
         match n_bytes {
             Err(_) => {
-                eprintln!("failed to read from TCP socket");
+                log::error!("failed to read from TCP socket");
                 return;
             }
             Ok(0) => {
-                println!("socket is closed");
+                log::info!("socket is closed");
                 return;
             }
             Ok(n) => {
                 let Ok(cmd) = serde_json::from_slice::<Command>(&in_buffer[..n]) else {
-                    eprintln!("something went wrong receiving a message");
+                    log::error!("something went wrong receiving a message");
                     continue;
                 };
                 handle_command(cmd, addr, event_chan.clone()).await;

@@ -45,40 +45,46 @@ async fn handle_events(mut event_chan: mpsc::Receiver<Event>) {
         match event {
             Event::NewConnection { addr, out_stream } => {
                 unassigned_conns.insert(addr, out_stream);
+                log::info!("{} connected", addr.ip());
             }
             Event::ConsumerAssigned { addr, id } => {
+                let id1 = id.clone();
                 if !unassigned_conns.contains_key(&addr) {
-                    eprintln!("connection not found");
                     continue;
                 }
                 let out_stream = unassigned_conns.remove(&addr).unwrap();
                 let consumer = Consumer::new(out_stream);
                 consumers.insert(id, consumer);
+                log::info!("assigned {} as consumer with ID {}", addr.ip(), id1);
             }
             Event::ConsumerStarted { id } => {
                 // FIXME: removing a consumer allows consumers to have the same id
                 //        after starting a consumer.
                 if let Some(consumer) = consumers.remove(&id) {
                     tokio::spawn(consumer.consume());
+                    log::info!("consumer {} started", id);
                 }
             }
             Event::ProducerAssigned { addr, id } => {
+                let id1 = id.clone();
                 if !unassigned_conns.contains_key(&addr) {
-                    eprintln!("connection not found");
                     continue;
                 }
                 let out_stream = unassigned_conns.remove(&addr).unwrap();
                 producers.insert(id, out_stream);
+                log::info!("assigned {} as producer with ID {}", addr.ip(), id1);
             }
             Event::QueueAssigned { consumer_id, queue } => {
                 if let Some(c) = consumers.get_mut(&consumer_id) {
                     if let Some(q) = queue_map.get(&queue) {
                         let rx = q.subscribe();
                         c.add_queue(rx);
+                        log::info!("assigned {} to consumer {}", queue, consumer_id);
                     }
                 }
             }
             Event::QueueDeclared { queue_name, size } => {
+                let qn = queue_name.clone();
                 if queue_map.contains_key(&queue_name) {
                     continue;
                 }
@@ -87,6 +93,7 @@ async fn handle_events(mut event_chan: mpsc::Receiver<Event>) {
                 }
                 let (tx, _) = broadcast::channel::<bytes::Bytes>(size);
                 queue_map.insert(queue_name, tx);
+                log::info!("queue {} declared", qn);
             }
             Event::MessageReceived {
                 queue_name,
@@ -98,18 +105,30 @@ async fn handle_events(mut event_chan: mpsc::Receiver<Event>) {
                         match q.send(message) {
                             Ok(_) => {
                                 let _ = conn.write(ACK).await;
+                                log::info!(
+                                    "message successfully received from producer {}",
+                                    producer_id
+                                );
                             }
-                            Err(err) => {
-                                eprintln!("Failed to publish message: {}", err);
+                            Err(_) => {
                                 let _ = conn
                                     .write(nack_msg("failed to publish message").as_slice())
                                     .await;
+                                log::warn!(
+                                    "failed to publish message from producer {}",
+                                    producer_id
+                                );
                             }
                         }
                     } else {
                         let _ = conn
                             .write(nack_msg("queue does not exist").as_slice())
                             .await;
+                        log::warn!(
+                            "{} tried to publish to undeclared queue {}",
+                            producer_id,
+                            queue_name
+                        );
                     }
                 }
             }
